@@ -1,0 +1,27 @@
+# Coq generated files
+*.vo
+*.vos
+*.vok
+*.glob
+*.aux
+.*.aux
+
+# Coq tactic/cache files
+.lia.cache
+.nra.cache
+*.lia.cache
+*.nra.cache
+
+# Build directories
+_build/
+
+# macOS
+.DS_Store
+
+# Editor settings
+.vscode/
+
+# Local practice/test files
+Basics.v
+QuantumLibTest.v
+Vector2D.v
