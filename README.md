@@ -1,149 +1,77 @@
-# Formal Verification of a Quantum Strategy for the K7 Perfect-Matching Game
+Coq Verification of the K7 Quantum Strategy
 
-## The game
+This repository contains my first Coq formalization of the quantum strategy I used for the K7 perfect-matching game. I wrote it while learning Coq and QuantumLib.
 
-`K7` is the complete graph on seven vertices, so every pair of vertices is connected and there are 21 edges total.
+The game
 
-In the game, a referee gives one vertex to Alice and one vertex to Bob. They cannot communicate after getting their inputs, and each player has to return an edge touching the vertex they received.
+K7 is a graph with seven vertices, with an edge between every pair of vertices. This gives 21 total edges.
 
-They win if:
+A referee gives Alice one vertex and Bob another vertex. They cannot communicate after receiving their vertices. Each player must answer with an edge that contains the vertex they were given.
 
-- both players return the same edge, or
-- they return two disjoint edges.
+They win if their two edges are either:
 
-They lose if:
+the same edge, or
 
-- either player returns an edge that does not touch their input vertex, or
-- they return two different edges that share a vertex.
+completely disjoint, meaning they do not share a vertex.
 
-## Project goal
+They lose if one player gives an invalid edge or if they give two different edges that intersect.
 
-The quantum strategy is supposed to make every losing pair of answers have probability zero.
+Goal of the project
 
-Each of the 21 edges is assigned a vector in six-dimensional complex space. For each vertex, the six vectors on the edges touching that vertex form an orthonormal basis. Alice and Bob share a six-dimensional maximally entangled state and use the bases connected to the vertices they receive.
+The quantum strategy assigns one six-dimensional complex vector to each of the 21 edges. The six edge vectors connected to any one vertex are supposed to form an orthonormal basis.
 
-For valid output edges `e` and `f`, the ideal probability is
+The main goal of this formalization was to prove that the ideal strategy never produces a losing answer. More precisely, every losing pair of output edges should have probability exactly zero.
 
-```text
-(1/6) * |<edge_vector e, edge_vector f>|^2.
-```
+What is proved in Coq
 
-If two different edges intersect, their vectors are perpendicular, so their inner product is zero. That makes the probability of that losing answer zero.
+The current files prove the following results:
 
-The point of this Coq project was to check that reasoning exactly instead of only testing it numerically in Qiskit. If Coq accepts a theorem, the proof has been checked from the definitions and earlier lemmas.
+The seven vertices, 21 edges, and winning condition of the K7 game are represented in Coq.
 
-## Files
+The exact 21 complex edge vectors from the strategy are defined without floating-point approximations.
 
-- `K7Graph.v` defines the graph and the rules of the game.
-- `K7Strategy.v` proves the general logic for why the three kinds of losing outputs must have probability zero.
-- `K7Vectors.v` defines the actual K7 vectors and basis matrices and proves that they have the properties the strategy needs.
+Each of the 21 edge vectors is normalized, so its inner product with itself is 1.
 
-## What I proved in Coq
+The six vectors associated with each vertex form a unitary basis. This is proved for all seven basis matrices, B0 through B6.
 
-Quick version:
+If two edges are different and intersect, their assigned vectors are orthogonal, so their inner product is 0.
 
-- the full `K7` graph, its 21 edges, and the winning/losing rules;
-- the exact 21 edge vectors in `C^6`;
-- that the edge vectors are normalized;
-- that the six edge vectors around each vertex form a unitary measurement basis;
-- that two different edges sharing a vertex have orthogonal vectors;
-- that invalid outputs and different intersecting-edge outputs get probability zero under `ideal_probability`;
-- and finally, that every losing output pair has ideal probability zero.
+The ideal output-probability function gives probability 0 when Alice or Bob returns an edge that does not contain their assigned vertex.
 
-The rest of this README goes through those pieces in more detail.
+The ideal output-probability function also gives probability 0 when the two output edges are different and intersect.
 
-## Formalized results
+The final theorem combines these facts and proves that every losing output has probability 0:
 
-### 1. Exact graph and winning predicate
-
-`K7Graph.v` defines all seven vertices and all 21 edges. It also defines functions for checking:
-
-- whether a vertex belongs to an edge;
-- whether two edges are the same;
-- whether two edges are disjoint;
-- whether a full pair of answers wins the game.
-
-I also included small examples for representative winning and losing cases so the definitions can be sanity-checked.
-
-### 2. General zero-losing-probability theorem
-
-`K7Strategy.v` starts with an arbitrary probability function. It assumes that the function gives probability zero when:
-
-1. Alice returns an invalid edge;
-2. Bob returns an invalid edge;
-3. Alice and Bob return different intersecting edges.
-
-The theorem `losing_probability_zero` proves that these three cases cover every possible way to lose. So any probability function satisfying those assumptions gives probability zero to every losing output.
-
-### 3. Exact edge vectors
-
-`K7Vectors.v` defines all 21 edge vectors in `C^6`. The construction uses the exact complex number
-
-```text
-omega = -1/2 + i*sqrt(3)/2
-```
-
-and its conjugate. I used exact expressions instead of floating-point approximations. Each graph edge is connected to its vector through `edge_vector`.
-
-### 4. Normalized vectors
-
-For the edge vectors, the development proves statements of the form
-
-```text
-inner_product v v = 1.
-```
-
-So the vectors have length one. Part of this required proving exact facts about `omega`, including its magnitude and the identity `(sqrt(3))^2 = 3`.
-
-### 5. Unitary measurement bases
-
-For each vertex, the six vectors on its incident edges are put into a `6 x 6` basis matrix, named `B0` through `B6`.
-
-The proofs show that:
-
-- each matrix is well formed;
-- its columns are normalized;
-- different columns are orthogonal;
-- therefore the basis matrix is unitary.
-
-`B0` is also proved equal to the identity matrix. Together, these results show that all seven vertex collections really are valid quantum measurement bases.
-
-### 6. Graph rules connected to vector geometry
-
-The theorem `incompatible_edges_orthogonal` checks the finite set of edge pairs and proves:
-
-> If two edges are different and share a vertex, their assigned vectors have inner product zero.
-
-This is the main connection between the graph rule for losing and the geometry of the quantum vectors.
-
-### 7. Ideal output probabilities
-
-The function `ideal_probability` gives probability zero to invalid outputs. For valid outputs, it uses the squared magnitude of the edge-vector inner product, multiplied by `1/6` from the shared six-dimensional entangled state.
-
-Separate lemmas show that invalid answers get probability zero and that different intersecting edges also get probability zero.
-
-### 8. Final result
-
-The final theorem is `ideal_strategy_losing_probability_zero`:
-
-```text
 wins a b e f = false
-    -> ideal_probability a b e f = 0.
-```
+    -> ideal_probability a b e f = 0
 
-In plain language:
+There is also a more general theorem in K7Strategy.v. It proves that any probability function with the three zero-probability properties above must assign probability 0 to every losing output.
 
-> For any input vertices and any output edges, if those outputs lose the K7 game, the ideal strategy gives that output pair probability zero.
+How the probability is defined
 
-## Current scope
+For valid edge answers e and f, the ideal probability is
 
-This project formalizes the exact mathematical structure behind the ideal K7 strategy. It does not yet prove that the executable Qiskit circuit implements that strategy.
+(1/6) * |<edge_vector e, edge_vector f>|^2
 
-It also does not yet:
+The factor 1/6 comes from the shared six-dimensional maximally entangled state. If two different edges intersect, their vectors are orthogonal. Their inner product is therefore 0, so that pair of answers has probability 0.
 
-- prove in Coq that all output probabilities sum to one for every input pair;
-- derive `ideal_probability` directly from an explicit shared state and measurement program;
-- represent and verify the circuit in SQIR;
-- verify a compiled gate decomposition;
-- model hardware noise.
+Files
+
+K7Graph.v defines K7 and the rules for winning and losing.
+
+K7Strategy.v proves the general theorem about losing outputs having probability 0.
+
+K7Vectors.v contains the edge vectors, basis matrices, probability definition, and the proofs for the concrete K7 strategy.
+
+What is not proved yet
+
+This is a proof of the ideal mathematical strategy, not yet a verification of my executable Qiskit circuit. In particular, the current files do not yet prove that:
+
+all output probabilities sum to 1 for every input pair;
+
+the circuit is represented and verified in SQIR;
+
+a compiled gate decomposition is verified;
+
+hardware noise is modeled.
 
