@@ -1,19 +1,37 @@
 
+
 # Coq Verification of the K7 Quantum Strategy
 
 This repository contains my Coq formalization of the quantum strategy for the K7 perfect-matching game. I wrote it while learning Coq and QuantumLib.
 
-The formalization covers the graph and its 21 edge vectors, the seven measurement bases, the shared entangled state, Alice and Bob's basis-change operations, raw measurement outcomes, and the decoder that converts those outcomes into graph edges. The main theorem proves that every losing pair of valid raw outcomes has probability exactly zero in the ideal six-dimensional strategy.
+The project formalizes the graph, the 21 complex edge vectors, and the seven measurement bases. It also explicitly defines the shared entangled state, Alice and Bob's measurement-basis changes, their raw measurement outcomes, and the decoder that turns those outcomes into graph edges.
 
-## 1. The game
+The main theorem proves that every losing pair of valid raw measurement outcomes has probability exactly zero under the ideal six-dimensional quantum strategy.
 
-K7 is the complete graph on seven vertices, `V0` through `V6`. Every pair of *distinct* vertices has an edge, so the graph has 21 edges. Each vertex belongs to six edges.
+## 1. The K7 perfect-matching game
 
-A referee gives Alice an input vertex and Bob an input vertex. They may agree on a strategy beforehand, but they cannot communicate after receiving their inputs. Each must answer with an edge that contains their assigned vertex.
+K7 is the complete graph on seven vertices:
 
-### Example: Alice gets V2 and Bob gets V3
+`V0, V1, V2, V3, V4, V5, V6`
 
-Alice can return any of these six edges:
+Every pair of distinct vertices is connected by an edge. There are therefore 21 edges in total, and every vertex belongs to exactly six edges.
+
+### Rules
+
+A referee gives Alice one vertex and Bob another vertex. The players may agree on a strategy before the game begins, but they cannot communicate after receiving their inputs.
+
+Each player must answer with an edge that contains their assigned vertex.
+
+They win if both answers are valid and their chosen edges are either:
+
+- **The same edge**, or
+- **Disjoint edges**, meaning the edges do not share any vertex.
+
+They lose if either player gives an invalid answer, or if their edges are different but intersect.
+
+### Example: Alice receives V2 and Bob receives V3
+
+Alice must choose one of the six edges incident to `V2`:
 
 - `(V0,V2)`
 - `(V1,V2)`
@@ -22,154 +40,386 @@ Alice can return any of these six edges:
 - `(V2,V5)`
 - `(V2,V6)`
 
-Bob must choose one of the six edges containing `V3`.
+Bob must choose one of the six edges incident to `V3`.
 
-They **win** if both responses are valid and their edges are either **the same edge** or **disjoint** (share no vertex).
+Here are four possible outcomes:
 
-| Alice's answer | Bob's answer | Result | Reason |
+| Alice's answer | Bob's answer | Result | Explanation |
 |---|---|---|---|
-| `(V2,V3)` | `(V2,V3)` | Win | The edges are identical and both answers are valid. |
-| `(V0,V2)` | `(V1,V3)` | Win | The edges have no vertex in common. |
-| `(V0,V2)` | `(V0,V3)` | Lose | The edges differ but intersect at `V0`. |
-| `(V0,V1)` | `(V1,V3)` | Lose | Alice's edge does not contain her input, `V2`. |
+| `(V2,V3)` | `(V2,V3)` | Win | The edges are identical, and both players answered with an edge containing their input vertex. |
+| `(V0,V2)` | `(V1,V3)` | Win | The edges share no vertices, so they are disjoint. |
+| `(V0,V2)` | `(V0,V3)` | Lose | Both answers are valid, but the two different edges intersect at `V0`. |
+| `(V0,V1)` | `(V1,V3)` | Lose | Alice's answer does not contain her assigned vertex, `V2`. |
 
-An answer such as `(V2,V2)` is not a valid graph edge because its endpoints are not distinct.
+An answer such as `(V2,V2)` is also invalid because K7 has edges only between distinct vertices.
 
-The rules also cover equal inputs. If both players receive `V2`, every valid answer from either player contains `V2`. Two *different* valid answers would intersect at `V2`, so in that case they can win only by returning the same edge.
+### What if Alice and Bob receive the same vertex?
 
-`K7Graph.v` defines the graph predicates and the `wins` function implementing these conditions.
+Suppose both players receive `V2`.
 
-## 2. Undirected edges in Coq
+Every valid answer from either player must contain `V2`. If they choose different edges, those edges necessarily intersect at `V2`, so they lose.
 
-An edge is represented by a pair of vertices. Since K7 is undirected, `(V1,V2)` and `(V2,V1)` refer to the same graph edge. `ordered_endpoints` puts both orientations into the same canonical order before comparing edges or assigning vectors. For example, both orientations of the edge between `V1` and `V2` map to `v7`.
+Therefore, when the players receive the same vertex, they must return the same edge to win.
 
-The graph code also defines the checks for valid edges, whether a vertex belongs to an edge, edge equality, and disjointness. These are the exact predicates used by the later game and probability proofs.
+The game rules are formalized in `K7Graph.v`, including the `wins` function that determines whether a pair of answers wins.
 
-## 3. The 21 edge vectors and seven bases
+## 2. Representing undirected edges
 
-Every graph edge is assigned one vector in six-dimensional complex space. The 21 vectors, `v1` through `v21`, are defined using exact complex numbers, including `1/2`, `omega/2`, and `omega2/2`. Here `omega = -1/2 + i*sqrt(3)/2`, and `omega2` is its complex conjugate. No floating-point approximations are needed.
+In Coq, an edge is represented as a pair of vertices.
 
-Coq proves that every edge vector is normalized: its inner product with itself is `1`.
+K7 is an undirected graph, so `(V1,V2)` and `(V2,V1)` must represent the same edge.
 
-The six vectors attached to each vertex are used as the columns of that vertex's measurement-basis matrix:
+The function `ordered_endpoints` puts both orientations into a canonical order. This ensures that reversing an edge does not affect its identity or its assigned quantum vector.
 
-| Input vertex | Basis matrix | Columns |
+For example:
+
+```coq
+edge_vector (V1,V2) = v7
+edge_vector (V2,V1) = v7
+```
+
+The graph formalization also includes predicates for checking valid edges, whether a vertex belongs to an edge, whether two edges are equal, and whether two edges are disjoint.
+
+These are used in both the general game proof and the quantum-strategy proof.
+
+## 3. The 21 complex edge vectors
+
+The quantum strategy assigns one vector in six-dimensional complex space to each of K7's 21 edges.
+
+These vectors are defined in `K7Vectors.v` as `v1` through `v21`.
+
+The vectors use exact complex numbers, including:
+
+```text
+1/2
+omega/2
+omega2/2
+```
+
+where:
+
+```text
+omega  = -1/2 + i*sqrt(3)/2
+omega2 = -1/2 - i*sqrt(3)/2
+```
+
+The definitions use exact arithmetic rather than floating-point approximations.
+
+### Normalization
+
+Every edge vector is proved to be normalized. In other words, the inner product of each vector with itself equals 1.
+
+```text
+inner_product(u_e, u_e) = 1
+```
+
+The Coq development proves the necessary complex-number identities and then establishes normalization for all 21 vectors.
+
+## 4. The seven measurement bases
+
+Every vertex has six incident edges. The six vectors assigned to those edges form that vertex's measurement basis.
+
+Each measurement basis is represented by a 6-by-6 matrix whose columns are the corresponding edge vectors.
+
+| Vertex | Basis | Columns |
 |---|---|---|
-| `V0` | `B0` | `v1, v2, v3, v4, v5, v6` |
-| `V1` | `B1` | `v1, v7, v8, v9, v10, v11` |
-| `V2` | `B2` | `v2, v7, v12, v13, v14, v15` |
-| `V3` | `B3` | `v3, v8, v12, v16, v17, v18` |
-| `V4` | `B4` | `v4, v9, v13, v16, v19, v20` |
-| `V5` | `B5` | `v5, v10, v14, v17, v19, v21` |
-| `V6` | `B6` | `v6, v11, v15, v18, v20, v21` |
+| V0 | B0 | v1, v2, v3, v4, v5, v6 |
+| V1 | B1 | v1, v7, v8, v9, v10, v11 |
+| V2 | B2 | v2, v7, v12, v13, v14, v15 |
+| V3 | B3 | v3, v8, v12, v16, v17, v18 |
+| V4 | B4 | v4, v9, v13, v16, v19, v20 |
+| V5 | B5 | v5, v10, v14, v17, v19, v21 |
+| V6 | B6 | v6, v11, v15, v18, v20, v21 |
 
-For each basis, the proof establishes that its columns are normalized and mutually orthogonal. The lemmas `B0_unitary` through `B6_unitary` establish that the seven basis matrices are unitary. `vertex_basis` selects the appropriate matrix from the input vertex.
+For example, the basis `B2` consists of the six vectors associated with the edges incident to `V2`.
 
-There is a second important geometric result:
+### Proving unitarity
+
+For each measurement basis, the Coq proofs establish that its columns are normalized and mutually orthogonal.
+
+This means the columns form an orthonormal basis. Consequently, the corresponding basis matrix is unitary.
+
+For a basis matrix `B`, the relevant condition is:
+
+```text
+adjoint(B) * B = I
+```
+
+The proofs `B0_unitary` through `B6_unitary` establish unitarity for all seven bases.
+
+The function `vertex_basis` selects the correct measurement-basis matrix for a given input vertex.
+
+## 5. Orthogonality of incompatible edges
+
+The central geometric property of the strategy is that two different, intersecting edges have orthogonal vectors.
+
+This is formalized by:
 
 ```coq
 Theorem incompatible_edges_orthogonal :
   forall e f,
     edge_equal e f = false ->
     disjoint e f = false ->
-    inner_product (edge_vector e) (edge_vector f) = C0.
+    inner_product (edge_vector e)
+                  (edge_vector f) = C0.
 ```
 
-In other words, two **different, intersecting edges** have orthogonal vectors. These are the incompatible edge pairs that would lose the game when both answers are otherwise valid. The remaining proof shows why this vector identity makes their *actual quantum measurement probability* zero.
+For example, `(V0,V2)` and `(V0,V3)` are different edges that intersect at `V0`. Their assigned vectors therefore have inner product zero.
 
-## 4. The shared entangled state
+These are exactly the incompatible pairs that cause Alice and Bob to lose when both players otherwise give valid edge answers.
 
-Alice and Bob start with the six-dimensional maximally entangled state:
+However, proving this geometric property alone does not establish that the actual quantum measurement process assigns probability zero to these outcomes.
+
+The next part of the formalization connects the geometry to the shared quantum state, measurement operations, and Born rule.
+
+## 6. The shared entangled state
+
+Alice and Bob share the six-dimensional maximally entangled state:
 
 ```text
-Phi6 = (|0,0> + |1,1> + |2,2> + |3,3> + |4,4> + |5,5>) / sqrt(6)
+Phi6 = (|0,0> + |1,1> + |2,2> +
+        |3,3> + |4,4> + |5,5>) / sqrt(6)
 ```
 
-`phi6_unscaled` explicitly defines the six terms, and `phi6` multiplies their sum by `1/sqrt(6)`. Alice's local space has dimension 6 and Bob's has dimension 6, so the joint state is represented as a 36-dimensional vector.
+The definition `phi6_unscaled` explicitly constructs the sum of the six computational-basis tensor products.
 
-## 5. Alice's and Bob's measurement operations
+The definition `phi6` then applies the normalization factor `1/sqrt(6)`.
 
-Each input vertex determines a measurement basis. Alice uses the **conjugate basis**, and Bob uses the **original basis**. Because each basis vector is stored as a matrix column, their basis-change operations are:
+Alice's local system has dimension 6, and Bob's local system also has dimension 6. Their combined quantum state therefore belongs to a 36-dimensional space.
+
+This explicitly defined state is the starting point for the later quantum probability calculations.
+
+## 7. Alice and Bob's measurement operations
+
+The measurement basis each player uses depends on the vertex received from the referee.
+
+Alice measures in the conjugate basis associated with her input vertex, while Bob measures in the original basis associated with his input vertex.
+
+Because the basis vectors are stored as matrix columns, the corresponding basis-change operations are:
 
 ```text
 Alice: transpose(B_a)
+
 Bob:   adjoint(B_b)
+
 Joint: transpose(B_a) tensor adjoint(B_b)
 ```
 
-Here `B_a` and `B_b` are the basis matrices selected by Alice's and Bob's input vertices. The tensor product is necessary because the two matrices act on separate six-dimensional systems.
+Here `B_a` and `B_b` are the basis matrices selected by Alice's and Bob's respective input vertices.
 
-`alice_basis_change`, `bob_basis_change`, and `joint_basis_change` define these operations. `post_basis_state` applies their combined operation to `phi6`. Thus the state being measured is built explicitly from the initial entangled state and the two players' measurement choices.
+The tensor product combines the two operations because Alice's matrix acts on her own six-dimensional system and Bob's matrix acts on his separate six-dimensional system.
 
-## 6. Raw measurement outcomes and decoding
+The definitions `alice_basis_change`, `bob_basis_change`, and `joint_basis_change` represent these operations in Coq.
 
-After the basis changes, both players measure in the computational basis. Alice obtains a number `j` and Bob obtains a number `k`, each from `0` through `5` in this six-dimensional model.
+The combined basis change is applied to the shared entangled state by `post_basis_state`.
 
-`raw_outcome_vector j k` represents the joint computational outcome `|j> tensor |k>`. `raw_outcome_probability a b j k` uses QuantumLib's Born-rule function to calculate the probability of that outcome in `post_basis_state a b`.
+Therefore, the state that Alice and Bob measure is constructed explicitly from their input-dependent basis changes and their shared entangled state.
 
-The game requires edges, not numbers, so `decode_outcome` converts each player's input vertex and raw outcome into an edge. For example, the columns of `B2` give the following decoding:
+## 8. Raw measurement outcomes and decoding
 
-| Raw outcome at `V2` | Decoded edge |
+After applying their basis changes, Alice and Bob measure in the computational basis.
+
+Alice receives a raw outcome `j`, and Bob receives a raw outcome `k`. In the six-dimensional model, valid outcomes range from 0 through 5.
+
+The joint computational-basis outcome is:
+
+```text
+|j> tensor |k>
+```
+
+This is represented in Coq by `raw_outcome_vector`.
+
+The definition `raw_outcome_probability` uses QuantumLib's `probability_of_outcome` to calculate the probability of obtaining the joint outcome from `post_basis_state`.
+
+### Why a decoder is necessary
+
+The quantum measurement returns numbers, but the K7 game requires players to return graph edges.
+
+The function `decode_outcome` converts an input vertex and a raw measurement outcome into the corresponding incident edge.
+
+For example:
+
+```coq
+decode_outcome V2 1 = Some (V1,V2).
+```
+
+The decoding for vertex `V2` is:
+
+| Raw outcome | Decoded edge |
 |---|---|
-| `0` | `(V0,V2)` |
-| `1` | `(V1,V2)` |
-| `2` | `(V2,V3)` |
-| `3` | `(V2,V4)` |
-| `4` | `(V2,V5)` |
-| `5` | `(V2,V6)` |
+| 0 | (V0,V2) |
+| 1 | (V1,V2) |
+| 2 | (V2,V3) |
+| 3 | (V2,V4) |
+| 4 | (V2,V5) |
+| 5 | (V2,V6) |
 
-The same graph edge can have different raw numbers in different vertex bases. For instance, `V0` with outcome `1` and `V2` with outcome `0` both decode to `(V0,V2)`. This is why the game checks **decoded edges**, not whether the raw numbers match.
+Importantly, the same edge can correspond to different raw measurement outcomes depending on the player's input vertex.
 
-`decode_outcome_matches_basis` proves that a decoded edge's vector is exactly the corresponding basis column. `decoded_edge_incident` proves that every successfully decoded edge contains the player's input vertex. `decode_valid_outcome` proves that every raw outcome from `0` to `5` can be decoded.
+For example:
 
-## 7. Linking the circuit measurement to the decoded edge vectors
+```coq
+decode_outcome V0 1 = Some (V0,V2).
 
-This is the main bridge between the explicit quantum operations and the graph strategy.
-
-The raw-outcome amplitude starts by comparing the computational outcome `|j,k>` with the shared state *after* the combined basis change. `raw_outcome_probability_moved` uses an inner-product identity to move the basis-change operation onto the outcome instead. This does **not** change the probability; it rewrites the same amplitude into a form that exposes the measurement vectors.
-
-`joint_basis_change_adjoint` and `moved_raw_outcome_factors` split the transformed joint outcome into Alice's and Bob's separate parts. The proofs `alice_outcome_matches_edge` and `bob_outcome_matches_edge` show that these parts equal, respectively:
-
-```text
-Alice: complex_conjugate(edge_vector e)
-Bob:   edge_vector f
+decode_outcome V2 0 = Some (V0,V2).
 ```
 
-The entry-by-entry proof `moved_outcome_matches_edges_entry` and the matrix-equivalence proof `moved_outcome_matches_edges_equiv` combine these results. The theorem `raw_probability_matches_decoded_edges` then establishes:
+Both players have selected the same graph edge, even though their raw outcomes are different.
+
+Therefore, the K7 winning condition must compare the decoded edges rather than simply compare the raw measurement numbers.
+
+### Verifying the decoder
+
+The theorem `decode_outcome_matches_basis` proves that every successfully decoded edge corresponds to exactly the correct column of the player's measurement-basis matrix.
+
+The lemma `decoded_edge_incident` proves that every successfully decoded edge contains the player's input vertex.
+
+The lemma `decode_valid_outcome` establishes that every valid raw outcome from 0 to 5 can be decoded into an edge.
+
+Together, these results connect the numerical quantum measurement outcomes to the graph's required answers.
+
+## 9. Connecting the quantum measurement to the edge vectors
+
+This is the central connection between the explicit quantum operations and the graph strategy.
+
+The original raw measurement amplitude compares the computational-basis outcome `|j,k>` with the shared state after the combined basis change.
+
+The proof `raw_outcome_probability_moved` rewrites the same amplitude using the adjoint of the combined basis-change matrix.
+
+Instead of applying the basis change to the state and then comparing it with the raw outcome, we can equivalently apply the adjoint of the basis change to the raw outcome and compare the resulting vector with the original shared state.
+
+This rewrite is useful because it exposes the measurement-basis vectors associated with the raw outcomes.
+
+### Separating Alice's and Bob's vectors
+
+The proofs `joint_basis_change_adjoint` and `moved_raw_outcome_factors` simplify the adjoint of the combined operation and separate the transformed outcome into Alice's and Bob's individual vectors.
+
+The proof `alice_outcome_matches_edge` shows that Alice's part corresponds to the complex conjugate of her decoded edge vector.
+
+The proof `bob_outcome_matches_edge` shows that Bob's part corresponds to his ordinary decoded edge vector.
+
+Thus the joint transformed outcome agrees, at every valid entry, with:
 
 ```text
-If Alice's raw outcome decodes to e and Bob's decodes to f, then
-
-raw_outcome_probability(a, b, j, k) = quantum_edge_probability(e, f).
+complex_conjugate(edge_vector e) tensor edge_vector f
 ```
 
-This equality is what makes the later zero-probability result a statement about the **defined state and measurement operations**, not just a probability formula assigned to graph edges.
+The lemmas `moved_outcome_matches_edges_entry` and `moved_outcome_matches_edges_equiv` establish this relationship entry by entry and then as matrix equivalence.
 
-## 8. Deriving the probability from Phi6
+### Proving the probability connection
 
-`phi6_unscaled_amplitude` expands the six terms of the shared state. `phi6_amplitude` includes the `1/sqrt(6)` normalization. Together they prove the amplitude identity:
+The theorem `raw_probability_matches_decoded_edges` combines these results.
+
+If Alice's raw outcome `j` decodes to edge `e` and Bob's raw outcome `k` decodes to edge `f`, then:
 
 ```text
-amplitude(e, f) = conjugate(inner_product(u_e, u_f)) / sqrt(6)
+raw_outcome_probability(a, b, j, k)
+    =
+quantum_edge_probability(e, f)
 ```
 
-Taking its squared magnitude gives the familiar mathematical expression:
+This establishes that the probability calculated from the explicit shared state and measurement operations agrees with the probability associated with the decoded edge vectors.
+
+The zero-probability proof can therefore reason about the actual defined quantum measurement process rather than starting with an independently assigned edge-probability formula.
+
+## 10. Deriving the amplitude from the shared state
+
+The next step derives the measurement amplitude directly from the shared entangled state.
+
+The proof `phi6_unscaled_amplitude` expands the six terms of the unnormalized shared state.
+
+The proof `phi6_amplitude` then includes the normalization factor `1/sqrt(6)`.
+
+Together, they establish:
 
 ```text
-probability(e, f) = |inner_product(u_e, u_f)|^2 / 6
+amplitude(e, f)
+    =
+conjugate(inner_product(u_e, u_f)) / sqrt(6)
 ```
 
-The amplitude identity is proved in Coq. The final zero-probability argument uses that identity directly; it does not require a separate Coq theorem simplifying the entire probability to the expression above.
+The complex conjugate comes from Alice's conjugated measurement vectors and the inner-product convention used by QuantumLib.
 
-If edges `e` and `f` are different and intersect, `incompatible_edges_orthogonal` says their inner product is zero. The amplitude is then zero, and the Born-rule probability is zero as well. This is formalized by `quantum_edge_probability_zero_if_incompatible`.
+The Born rule calculates probability by squaring the magnitude of the amplitude.
 
-## 9. Connecting the quantum result to the game
+Consequently, the corresponding mathematical probability is:
 
-`circuit_edge_probability` assigns the quantum-derived probability to valid pairs of output edges and zero to invalid pairs. Its supporting lemmas establish zero probability for an invalid Alice edge, an invalid Bob edge, and two different intersecting edges.
+```text
+probability(e, f)
+    =
+|inner_product(u_e, u_f)|^2 / 6
+```
 
-The general theorem in `K7Strategy.v`, `losing_probability_zero`, combines those three facts to show that losing edge responses have probability zero. `raw_probability_matches_game_edges` connects that game-level result back to the actual raw measurement probability.
+The Coq development proves the amplitude identity directly. The final zero-probability proof uses that identity without needing a separate theorem simplifying the complete probability expression.
 
-The final theorem is:
+### Why incompatible edges have probability zero
+
+If two different edges intersect, the earlier orthogonality theorem establishes:
+
+```text
+inner_product(u_e, u_f) = 0
+```
+
+The derived amplitude is therefore also zero.
+
+Applying the Born rule gives:
+
+```text
+probability(e, f) = |0|^2 = 0
+```
+
+This result is formalized by `quantum_edge_probability_zero_if_incompatible`.
+
+The proof connects a losing graph configuration to a zero quantum amplitude and, consequently, to zero measurement probability.
+
+## 11. Structure of the Coq proofs
+
+The formalization is divided into several stages. Each stage establishes a property needed by the next one.
+
+| Coq proof | What it establishes |
+|---|---|
+| `B0_unitary` through `B6_unitary` | All seven measurement-basis matrices are unitary. |
+| `incompatible_edges_orthogonal` | Different, intersecting edges have orthogonal vectors. |
+| `decode_outcome_matches_basis` | A decoded edge corresponds to the correct measurement-basis column. |
+| `raw_outcome_probability_moved` | Rewrites the actual measurement probability to expose the measurement vectors. |
+| `joint_basis_change_adjoint` | Simplifies the adjoint of the combined basis-change matrix. |
+| `moved_raw_outcome_factors` | Separates the transformed joint outcome into Alice's and Bob's individual vectors. |
+| `alice_outcome_matches_edge` | Alice's transformed outcome corresponds to her conjugated edge vector. |
+| `bob_outcome_matches_edge` | Bob's transformed outcome corresponds to his ordinary edge vector. |
+| `moved_outcome_matches_edges_equiv` | Combines Alice's and Bob's results into the joint decoded-edge measurement vector. |
+| `raw_probability_matches_decoded_edges` | Connects the probability calculated from the explicit quantum operations to the decoded edge-vector probability. |
+| `phi6_unscaled_amplitude` | Derives the measurement amplitude from the six terms of the unnormalized shared state. |
+| `phi6_amplitude` | Includes the normalization factor and establishes the amplitude for the normalized shared state. |
+| `quantum_edge_probability_zero_if_incompatible` | Uses the amplitude identity and edge orthogonality to prove zero probability for incompatible edge pairs. |
+| `decoded_edge_incident` | Proves that successfully decoded edges contain the player's input vertex. |
+| `raw_probability_matches_game_edges` | Connects the raw quantum measurement probability to the probability used by the game-level proof. |
+| `raw_strategy_losing_probability_zero` | Proves that every losing pair of valid raw measurement outcomes has probability zero. |
+
+The most important part of the proof is the connection between the explicitly defined quantum operations and the decoded edge vectors.
+
+The graph-theoretic orthogonality theorem provides the mathematical reason incompatible edges cannot occur together. The measurement and amplitude proofs establish why this property also holds for the probability calculated from the quantum state and measurement operations.
+
+## 12. Connecting the quantum result to the game's rules
+
+The definition `circuit_edge_probability` assigns the quantum-derived probability to valid pairs of output edges and zero to invalid pairs.
+
+Its supporting lemmas establish three zero-probability properties:
+
+1. An invalid Alice edge has probability zero.
+2. An invalid Bob edge has probability zero.
+3. Two different, intersecting edges have probability zero.
+
+The general theorem `losing_probability_zero` in `K7Strategy.v` establishes that any probability function satisfying these three conditions assigns zero probability to every losing game output.
+
+The theorem `circuit_edge_losing_probability_zero` applies this general result to the quantum-derived edge probability.
+
+The theorem `raw_probability_matches_game_edges` then connects the game-level probability back to the raw probability obtained from the shared state and measurement operations.
+
+The final proof therefore combines the explicit quantum construction with the original graph winning condition.
+
+## 13. Final theorem
+
+The main theorem is:
 
 ```coq
 Theorem raw_strategy_losing_probability_zero :
@@ -179,33 +429,67 @@ Theorem raw_strategy_losing_probability_zero :
     raw_outcome_probability a b j k = 0%R.
 ```
 
-In words: for **any** input vertices and any valid six-dimensional raw outcomes, if decoding those outcomes would lose the K7 game, the probability of obtaining them is exactly zero.
+In words:
 
-The full proof chain is:
+For any input vertices `a` and `b`, and any valid six-dimensional raw outcomes `j` and `k`, if decoding those outcomes would cause Alice and Bob to lose the K7 game, then the probability of obtaining that pair of outcomes is exactly zero.
+
+The entire proof follows this chain:
 
 ```text
-input vertices
-    -> select the two measurement bases
-    -> prepare Phi6 and apply the basis changes
-    -> measure raw outcomes j and k
-    -> decode them into edges e and f
-    -> identify any losing edge pair
-    -> use edge orthogonality and the derived amplitude
-    -> prove its Born-rule probability is zero
+Input vertices a and b
+          |
+          v
+Select the corresponding measurement bases
+          |
+          v
+Start with the shared entangled state Phi6
+          |
+          v
+Apply Alice's and Bob's basis changes
+          |
+          v
+Measure raw outcomes j and k
+          |
+          v
+Decode the outcomes into graph edges e and f
+          |
+          v
+Connect the raw probability to the edge vectors
+          |
+          v
+Use orthogonality for incompatible edge pairs
+          |
+          v
+Derive zero amplitude from the shared state
+          |
+          v
+Obtain zero probability from the Born rule
+          |
+          v
+Every losing pair of valid raw outcomes
+has probability zero
 ```
 
-The older `ideal_probability` and `ideal_strategy_losing_probability_zero` remain in the file. The new final theorem goes further by establishing the link to the explicitly defined shared state, measurements, and decoder.
+The original `ideal_probability` definition and `ideal_strategy_losing_probability_zero` theorem are also retained in the project.
 
-## 10. Files
+The newer theorem establishes the additional connection to the explicitly defined shared state, basis-change operations, computational-basis measurements, and decoder.
 
-- `K7Graph.v` defines vertices, undirected edges, canonical ordering, and the winning condition.
-- `K7Strategy.v` proves the general game-level zero-probability theorem.
-- `K7Vectors.v` defines the edge vectors, unitary bases, shared state, measurement operations, decoder, circuit-derived probabilities, and final quantum-strategy theorem.
+## 14. Files
 
-## 11. Verification
+- `K7Graph.v` defines the vertices, undirected edges, canonical edge ordering, and K7 winning and losing conditions.
+- `K7Strategy.v` proves the general theorem connecting the three zero-probability properties to every losing game output.
+- `K7Vectors.v` defines the 21 complex edge vectors, seven unitary measurement bases, shared entangled state, measurement operations, raw outcomes, decoder, quantum probabilities, and the final quantum-strategy theorem.
 
-The revised `K7Vectors.v` compiled successfully in the local Coq project. The final theorem was also checked using:
+## 15. Verification
+
+The revised Coq code compiles successfully in the local project.
+
+The final theorem was also checked using:
 
 ```coq
 Print Assumptions raw_strategy_losing_probability_zero.
 ```
+
+Coq reported three assumptions from its mathematical libraries: two concerning classical real numbers and one concerning functional extensionality.
+
+The project files were checked for unfinished proofs and project-level axiom declarations. After removing the earlier aborted placeholder, no `Admitted`, `admit`, `Axiom`, or `Abort` declarations remained.
