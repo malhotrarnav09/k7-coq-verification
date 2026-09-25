@@ -2,6 +2,8 @@ Require Import K7Graph.
 
 Require Import QuantumLib.Matrix.
 
+Require Import QuantumLib.VectorStates.
+
 Require Import QuantumLib.Quantum.
 
 Require Import QuantumLib.Eigenvectors.
@@ -9,6 +11,8 @@ Require Import QuantumLib.Eigenvectors.
 Require Import QuantumLib.Measurement.
 
 Require Import K7Strategy.
+
+Require Import QuantumLib.CauchySchwarz.
 
 
 Local Open Scope R_scope.
@@ -124,29 +128,30 @@ Definition v21 : Vector 6 :=
 
   (*match each edge vector to an edge*)
   Definition edge_vector (e : Edge) : Vector 6 :=
-  match e with
-  | E01 => v1
-  | E02 => v2
-  | E03 => v3
-  | E04 => v4
-  | E05 => v5
-  | E06 => v6
-  | E12 => v7
-  | E13 => v8
-  | E14 => v9
-  | E15 => v10
-  | E16 => v11
-  | E23 => v12
-  | E24 => v13
-  | E25 => v14
-  | E26 => v15
-  | E34 => v16
-  | E35 => v17
-  | E36 => v18
-  | E45 => v19
-  | E46 => v20
-  | E56 => v21
-  end.
+    match ordered_endpoints e with
+    | (V0, V1) => v1
+    | (V0, V2) => v2
+    | (V0, V3) => v3
+    | (V0, V4) => v4
+    | (V0, V5) => v5
+    | (V0, V6) => v6
+    | (V1, V2) => v7
+    | (V1, V3) => v8
+    | (V1, V4) => v9
+    | (V1, V5) => v10
+    | (V1, V6) => v11
+    | (V2, V3) => v12
+    | (V2, V4) => v13
+    | (V2, V5) => v14
+    | (V2, V6) => v15
+    | (V3, V4) => v16
+    | (V3, V5) => v17
+    | (V3, V6) => v18
+    | (V4, V5) => v19
+    | (V4, V6) => v20
+    | (V5, V6) => v21
+    | _ => Zero
+    end.
 
   (*verification of edge_vector*)
 Example edge12_vector_is_v7 :
@@ -154,6 +159,51 @@ Example edge12_vector_is_v7 :
 Proof.
   reflexivity.
 Qed.
+
+Example reversed_E12_vector_is_v7 :
+  edge_vector (V2, V1) = v7.
+Proof.
+  reflexivity.
+Qed.
+
+(* complex conjugate of a vector *)
+Definition vector_conj {n} (v : Vector n) : Vector n :=
+  fun i j => (v i j)^*.
+
+
+(* unnormalized maximally entangled state
+   |00> + |11> + ... + |55> *)
+Definition phi6_unscaled : Vector 36 :=
+  Mplus
+    (basis_vector 6 0 ⊗ basis_vector 6 0)
+    (Mplus
+      (basis_vector 6 1 ⊗ basis_vector 6 1)
+      (Mplus
+        (basis_vector 6 2 ⊗ basis_vector 6 2)
+        (Mplus
+          (basis_vector 6 3 ⊗ basis_vector 6 3)
+          (Mplus
+            (basis_vector 6 4 ⊗ basis_vector 6 4)
+            (basis_vector 6 5 ⊗ basis_vector 6 5))))).
+
+
+(* normalized shared state by dividing by 1/sqrt6*)
+Definition phi6 : Vector 36 :=
+  scale (RtoC (1 / sqrt 6)%R) phi6_unscaled.
+
+  (* joint Alice/Bob measurement vector for edges e and f *)
+Definition joint_measurement_vector
+    (e f : Edge) : Vector 36 :=
+  vector_conj (edge_vector e) ⊗ edge_vector f.
+
+
+(* probability of jointly obtaining edges e and f
+   from the shared state |Phi_6> *)
+Definition quantum_edge_probability
+    (e f : Edge) : R :=
+  probability_of_outcome
+    (joint_measurement_vector e f)
+    phi6.
 
 (*proof that v7 is normalized*)
 Example v7_normalized :
@@ -373,6 +423,240 @@ Definition B5 : Matrix 6 6 :=
 
 Definition B6 : Matrix 6 6 :=
   basis6 v6 v11 v15 v18 v20 v21.
+
+(*matches register measurment in each of the measurement basis*)
+Definition decode_outcome (v : Vertex) (k : nat) : option Edge :=
+  match v, k with
+  | V0, 0 => Some (V0, V1)
+  | V0, 1 => Some (V0, V2)
+  | V0, 2 => Some (V0, V3)
+  | V0, 3 => Some (V0, V4)
+  | V0, 4 => Some (V0, V5)
+  | V0, 5 => Some (V0, V6)
+
+  | V1, 0 => Some (V0, V1)
+  | V1, 1 => Some (V1, V2)
+  | V1, 2 => Some (V1, V3)
+  | V1, 3 => Some (V1, V4)
+  | V1, 4 => Some (V1, V5)
+  | V1, 5 => Some (V1, V6)
+
+  | V2, 0 => Some (V0, V2)
+  | V2, 1 => Some (V1, V2)
+  | V2, 2 => Some (V2, V3)
+  | V2, 3 => Some (V2, V4)
+  | V2, 4 => Some (V2, V5)
+  | V2, 5 => Some (V2, V6)
+
+  | V3, 0 => Some (V0, V3)
+  | V3, 1 => Some (V1, V3)
+  | V3, 2 => Some (V2, V3)
+  | V3, 3 => Some (V3, V4)
+  | V3, 4 => Some (V3, V5)
+  | V3, 5 => Some (V3, V6)
+
+  | V4, 0 => Some (V0, V4)
+  | V4, 1 => Some (V1, V4)
+  | V4, 2 => Some (V2, V4)
+  | V4, 3 => Some (V3, V4)
+  | V4, 4 => Some (V4, V5)
+  | V4, 5 => Some (V4, V6)
+
+  | V5, 0 => Some (V0, V5)
+  | V5, 1 => Some (V1, V5)
+  | V5, 2 => Some (V2, V5)
+  | V5, 3 => Some (V3, V5)
+  | V5, 4 => Some (V4, V5)
+  | V5, 5 => Some (V5, V6)
+
+  | V6, 0 => Some (V0, V6)
+  | V6, 1 => Some (V1, V6)
+  | V6, 2 => Some (V2, V6)
+  | V6, 3 => Some (V3, V6)
+  | V6, 4 => Some (V4, V6)
+  | V6, 5 => Some (V5, V6)
+
+  | _, _ => None
+  end.
+
+(* verification of decode_outcome*)
+Example decode_V2_1 :
+  decode_outcome V2 1 = Some (V1, V2).
+Proof.
+  reflexivity.
+Qed.
+
+Example decode_invalid_outcome :
+  decode_outcome V2 6 = None.
+Proof.
+  reflexivity.
+Qed.
+
+(*Match input vertex to basis*)
+Definition vertex_basis (v : Vertex) : Matrix 6 6 :=
+  match v with
+  | V0 => B0
+  | V1 => B1
+  | V2 => B2
+  | V3 => B3
+  | V4 => B4
+  | V5 => B5
+  | V6 => B6
+  end.
+
+Example V2_outcome1_matches_v7 :
+  get_col (vertex_basis V2) 1 = v7.
+Proof.
+  unfold get_col, vertex_basis, B2, basis6.
+
+  apply functional_extensionality.
+  intro x.
+
+  apply functional_extensionality.
+  intro y.
+
+  destruct y.
+  - reflexivity.
+  - unfold v7, vector6.
+    simpl.
+    destruct x as [| [| [| [| [| [| x]]]]]];
+    reflexivity.
+Qed.
+
+
+(* Alice measures in the conjugate basis.
+   With basis vectors stored as columns, the basis-change matrix is B^T. *)
+Definition alice_basis_change (a : Vertex) : Matrix 6 6 :=
+  transpose (vertex_basis a).
+
+
+(* Bob measures in the original basis.
+   The basis-change matrix is B^\dagger. *)
+Definition bob_basis_change (b : Vertex) : Matrix 6 6 :=
+  adjoint (vertex_basis b).
+
+
+(* Apply both players' basis changes simultaneously. *)
+Definition joint_basis_change
+    (a b : Vertex) : Matrix 36 36 :=
+  kron
+    (alice_basis_change a)
+    (bob_basis_change b).
+
+
+(* Apply the combined basis change to the initial state. *)
+Definition post_basis_state
+    (a b : Vertex) : Vector 36 :=
+  Mmult
+    (joint_basis_change a b)
+    phi6.
+
+
+(* computational-basis outcome j for Alice and k for Bob *)
+Definition raw_outcome_vector
+    (j k : nat) : Vector 36 :=
+  basis_vector 6 j ⊗ basis_vector 6 k. (*need to tensor as we tensored the measurment basis before*)
+
+(* probability of measuring outcomes j and k *)
+Definition raw_outcome_probability
+    (a b : Vertex) (j k : nat) : R :=
+  probability_of_outcome
+    (raw_outcome_vector j k)
+    (post_basis_state a b).
+
+(* rewrite the measurement probability so the outcome is expressed in terms of the measurement basis vectors: an easier form to manipulate *)
+Lemma raw_outcome_probability_moved :
+  forall a b j k,
+  raw_outcome_probability a b j k =
+  probability_of_outcome
+    (Mmult
+      (adjoint (joint_basis_change a b))
+      (raw_outcome_vector j k))
+    phi6.
+Proof.
+  intros a b j k.
+  unfold raw_outcome_probability,
+         probability_of_outcome,
+         post_basis_state.
+
+  rewrite inner_product_adjoint_r.
+  reflexivity.
+Qed.
+
+(* simplify the adjoint of the combined basis change *)
+Lemma joint_basis_change_adjoint :
+  forall a b,
+    adjoint (joint_basis_change a b) =
+    kron
+      (adjoint (alice_basis_change a))
+      (vertex_basis b).
+Proof.
+  intros a b.
+  unfold joint_basis_change.
+
+  transitivity
+    (kron
+      (adjoint (alice_basis_change a))
+      (adjoint (bob_basis_change b))).
+
+  - apply kron_adjoint.
+
+  - unfold bob_basis_change.
+    rewrite adjoint_involutive.
+    reflexivity.
+Qed.
+
+(* split the moved outcome into Alice's part and Bob's part *)
+Lemma moved_raw_outcome_factors :
+  forall a b j k,
+    Mmult
+      (adjoint (joint_basis_change a b))
+      (raw_outcome_vector j k)
+    =
+    kron
+      (Mmult
+        (adjoint (alice_basis_change a))
+        (basis_vector 6 j))
+      (Mmult
+        (vertex_basis b)
+        (basis_vector 6 k)).
+Proof.
+  intros a b j k.
+  rewrite joint_basis_change_adjoint.
+  unfold raw_outcome_vector.
+
+  apply (kron_mixed_product'
+    6 6 6 1
+    6 6 6 1
+    36 36 1).
+
+  all: reflexivity.
+Qed.
+
+(* check whether raw measurement outcomes win the game *)
+Definition raw_wins
+    (a b : Vertex) (j k : nat) : bool :=
+  match decode_outcome a j, decode_outcome b k with
+  | Some e, Some f => wins a b e f
+  | _, _ => false
+  end.
+
+(*proves whenever outcome k at vertex v decodes to edge e, column k of that vertex’s measurement basis is exactly the vector assigned to edge e*)
+Lemma decode_outcome_matches_basis :
+  forall v k e,
+    decode_outcome v k = Some e ->
+    forall row,
+      vertex_basis v row k = edge_vector e row 0.
+Proof.
+  intros v k e Hdecode row.
+
+  destruct v;
+  destruct k as [| [| [| [| [| [| k]]]]]];
+  simpl in Hdecode |-;
+  try discriminate.
+
+  all: inversion Hdecode; subst; reflexivity.
+Qed.
 
   (*prove B0 as identity & unitary*)
 Lemma B0_is_identity :
@@ -872,6 +1156,107 @@ Proof.
       v21_normalized.
 Qed.
 
+(* every vertex basis is a well-formed matrix *)
+Lemma vertex_basis_WF :
+  forall v,
+    WF_Matrix (vertex_basis v).
+Proof.
+  intro v.
+  destruct v; simpl.
+  - exact (proj1 B0_unitary).
+  - exact (proj1 B1_unitary).
+  - exact (proj1 B2_unitary).
+  - exact (proj1 B3_unitary).
+  - exact (proj1 B4_unitary).
+  - exact (proj1 B5_unitary).
+  - exact (proj1 B6_unitary).
+Qed.
+
+(* Bob's measurement outcome selects the vector of his decoded edge *)
+Lemma bob_outcome_matches_edge :
+  forall b k e row,
+    decode_outcome b k = Some e ->
+    (Mmult (vertex_basis b) (basis_vector 6 k)) row 0 =
+    edge_vector e row 0.
+Proof.
+  intros b k e row Hdecode.
+
+  rewrite matrix_times_basis_eq
+    by apply vertex_basis_WF.
+
+  exact (decode_outcome_matches_basis b k e Hdecode row).
+Qed.
+
+(* Alice's measurement outcome selects the conjugate of her decoded edge vector *)
+Lemma alice_outcome_matches_edge :
+  forall a j e row,
+    decode_outcome a j = Some e ->
+    (Mmult
+      (adjoint (alice_basis_change a))
+      (basis_vector 6 j)) row 0 =
+    (edge_vector e row 0)^*.
+Proof.
+  intros a j e row Hdecode.
+
+  rewrite matrix_times_basis_eq
+    by (unfold alice_basis_change;
+        apply WF_adjoint;
+        apply WF_transpose;
+        apply vertex_basis_WF).
+
+  unfold alice_basis_change, adjoint, transpose.
+  simpl.
+
+  rewrite (decode_outcome_matches_basis a j e Hdecode row).
+  reflexivity.
+Qed.
+
+(* the combined measurement gives the two decoded edge vectors *)
+Lemma moved_outcome_matches_edges_entry :
+  forall a b j k e f row,
+    decode_outcome a j = Some e ->
+    decode_outcome b k = Some f ->
+    (Mmult
+      (adjoint (joint_basis_change a b))
+      (raw_outcome_vector j k)) row 0 =
+    joint_measurement_vector e f row 0.
+Proof.
+  intros a b j k e f row Ha Hb.
+
+  rewrite moved_raw_outcome_factors.
+  unfold joint_measurement_vector, vector_conj, kron.
+
+  replace (0 / 1)%nat with 0%nat by reflexivity.
+  replace (0 mod 1)%nat with 0%nat by reflexivity.
+
+  rewrite (alice_outcome_matches_edge
+    a j e (row / 6) Ha).
+  rewrite (bob_outcome_matches_edge
+    b k f (row mod 6) Hb).
+
+  reflexivity.
+Qed.
+
+(* the transformed outcome and decoded edge vectors agree at every valid entry *)
+Lemma moved_outcome_matches_edges_equiv :
+  forall a b j k e f,
+    decode_outcome a j = Some e ->
+    decode_outcome b k = Some f ->
+    mat_equiv
+      (Mmult
+        (adjoint (joint_basis_change a b))
+        (raw_outcome_vector j k))
+      (joint_measurement_vector e f).
+Proof.
+  intros a b j k e f Ha Hb row col Hrow Hcol.
+
+  assert (col = 0) by lia.
+  subst col.
+
+  apply (moved_outcome_matches_edges_entry
+    a b j k e f row Ha Hb).
+Qed.
+
 (*checks edge orthogonality*)
 Ltac solve_edge_orthogonality :=
   unfold inner_product, Mmult, adjoint,
@@ -902,8 +1287,13 @@ Theorem incompatible_edges_orthogonal :
 Proof.
   intros e f Hdifferent Hintersecting.
 
-  destruct e;
-  destruct f;
+  destruct e as [e1 e2];
+  destruct f as [f1 f2];
+
+  destruct e1;
+  destruct e2;
+  destruct f1;
+  destruct f2;
   simpl in Hdifferent, Hintersecting |-;
   try discriminate.
 
@@ -984,3 +1374,240 @@ Proof.
       a b e f Hlose
   ).
 Qed.
+
+(* vectors that agree at every valid entry have the same inner product *)
+Lemma inner_product_mat_equiv_l :
+  forall {n} (u u' v : Vector n),
+    mat_equiv u u' ->
+    inner_product u v = inner_product u' v.
+Proof.
+  intros n u u' v H.
+  unfold inner_product, Mmult, adjoint.
+
+  apply big_sum_eq_bounded.
+  intros i Hi.
+
+  rewrite (H i 0 Hi ltac:(lia)).
+  reflexivity.
+Qed.
+
+(* the circuit probability equals the decoded edge-vector probability *)
+Lemma raw_probability_matches_decoded_edges :
+  forall a b j k e f,
+    decode_outcome a j = Some e ->
+    decode_outcome b k = Some f ->
+    raw_outcome_probability a b j k =
+    quantum_edge_probability e f.
+Proof.
+  intros a b j k e f Ha Hb.
+
+  rewrite raw_outcome_probability_moved.
+  unfold quantum_edge_probability, probability_of_outcome.
+
+  assert (Hinner :
+    inner_product
+      (Mmult
+        (adjoint (joint_basis_change a b))
+        (raw_outcome_vector j k))
+      phi6 =
+    inner_product (joint_measurement_vector e f) phi6).
+  {
+    apply inner_product_mat_equiv_l.
+    apply moved_outcome_matches_edges_equiv; assumption.
+  }
+
+  rewrite Hinner.
+  reflexivity.
+Qed.
+
+    (* measuring basis outcome i selects entry i of the vector *)
+Lemma inner_product_basis_entry :
+  forall (w : Vector 6) i,
+    i < 6 ->
+    inner_product w (basis_vector 6 i) = (w i 0)^*.
+Proof.
+  intros w i Hi.
+  destruct i as [|[|[|[|[|[|i]]]]]]; try lia;
+    unfold inner_product, Mmult, adjoint, basis_vector;
+    simpl; lca.
+Qed.
+
+
+(* prove that the 6 terms of our shared state give the inner product of the two vectors *)
+Lemma phi6_unscaled_amplitude :
+  forall (u v : Vector 6),
+    inner_product (vector_conj u ⊗ v) phi6_unscaled =
+    (inner_product u v)^*.
+Proof.
+  intros u v.
+  unfold phi6_unscaled.
+  repeat rewrite inner_product_plus_r.
+  unfold inner_product, Mmult, adjoint, vector_conj, kron, basis_vector.
+  simpl.
+  lca.
+Qed.
+
+(* include the 1/sqrt6 factor to get the amplitude for our normalized shared state *)
+Lemma phi6_amplitude :
+  forall (u v : Vector 6),
+    inner_product (vector_conj u ⊗ v) phi6 =
+    (RtoC (1 / sqrt 6)%R * (inner_product u v)^*)%C.
+Proof.
+  intros u v.
+  unfold phi6.
+  rewrite inner_product_scale_r.
+  rewrite phi6_unscaled_amplitude.
+  reflexivity.
+Qed.
+
+(* prove that different intersecting edges have 0 probability because their vectors are orthogonal *)
+Lemma quantum_edge_probability_zero_if_incompatible :
+  forall e f,
+    edge_equal e f = false ->
+    disjoint e f = false ->
+    quantum_edge_probability e f = 0%R.
+Proof.
+  intros e f Hdifferent Hintersecting.
+  unfold quantum_edge_probability, probability_of_outcome,
+         joint_measurement_vector.
+  rewrite phi6_amplitude.
+  rewrite (incompatible_edges_orthogonal
+             e f Hdifferent Hintersecting).
+  replace (C0^*) with C0 by lca.
+  rewrite Cmult_0_r, Cmod_0.
+  ring.
+Qed.
+
+(* calculate the probability of outputting edges e and f using our actual quantum probability *)
+Definition circuit_edge_probability
+    (a b : Vertex) (e f : Edge) : R :=
+  if andb (part_of a e) (part_of b f)
+  then quantum_edge_probability e f
+  else 0%R.
+
+(* Alice cannot output an edge that does not contain her input vertex *)
+Lemma circuit_probability_zero_if_alice_invalid :
+  forall a b e f,
+    part_of a e = false ->
+    circuit_edge_probability a b e f = 0%R.
+Proof.
+  intros a b e f Hinvalid.
+  unfold circuit_edge_probability.
+  rewrite Hinvalid.
+  reflexivity.
+Qed.
+
+(* same proof for Bob *)
+Lemma circuit_probability_zero_if_bob_invalid :
+  forall a b e f,
+    part_of b f = false ->
+    circuit_edge_probability a b e f = 0%R.
+Proof.
+  intros a b e f Hinvalid.
+  unfold circuit_edge_probability.
+  rewrite Hinvalid, andb_false_r.
+  reflexivity.
+Qed.
+
+(* incompatible edges have 0 probability using our earlier orthogonality proof *)
+Lemma circuit_probability_zero_if_incompatible :
+  forall a b e f,
+    edge_equal e f = false ->
+    disjoint e f = false ->
+    circuit_edge_probability a b e f = 0%R.
+Proof.
+  intros a b e f Hdifferent Hintersecting.
+  unfold circuit_edge_probability.
+  destruct (andb (part_of a e) (part_of b f)).
+  - apply quantum_edge_probability_zero_if_incompatible;
+      assumption.
+  - reflexivity.
+Qed.
+
+(* combine the previous lemmas to prove that losing edge outputs have 0 probability *)
+Theorem circuit_edge_losing_probability_zero :
+  forall a b e f,
+    wins a b e f = false ->
+    circuit_edge_probability a b e f = 0%R.
+Proof.
+  intros a b e f Hlose.
+  exact (losing_probability_zero
+    circuit_edge_probability
+    circuit_probability_zero_if_alice_invalid
+    circuit_probability_zero_if_bob_invalid
+    circuit_probability_zero_if_incompatible
+    a b e f Hlose).
+Qed.
+
+(* prove that the decoder always returns an edge containing the input vertex *)
+Lemma decoded_edge_incident :
+  forall v k e,
+    decode_outcome v k = Some e ->
+    part_of v e = true.
+Proof.
+  intros v k e Hdecode.
+  destruct v;
+  destruct k as [|[|[|[|[|[|k]]]]]];
+  simpl in Hdecode |-;
+  try discriminate.
+  all: inversion Hdecode; subst; reflexivity.
+Qed.
+
+(* connect the raw measurement probability to the probability of the decoded edges *)
+Lemma raw_probability_matches_game_edges :
+  forall a b j k e f,
+    decode_outcome a j = Some e ->
+    decode_outcome b k = Some f ->
+    raw_outcome_probability a b j k =
+    circuit_edge_probability a b e f.
+Proof.
+  intros a b j k e f Ha Hb.
+  rewrite (raw_probability_matches_decoded_edges a b j k e f Ha Hb).
+  unfold circuit_edge_probability.
+  rewrite (decoded_edge_incident a j e Ha).
+  rewrite (decoded_edge_incident b k f Hb).
+  reflexivity.
+Qed.
+
+(* prove that raw outcomes which decode to losing edges have 0 probability *)
+Theorem decoded_raw_losing_probability_zero :
+  forall a b j k e f,
+    decode_outcome a j = Some e ->
+    decode_outcome b k = Some f ->
+    raw_wins a b j k = false ->
+    raw_outcome_probability a b j k = 0%R.
+Proof.
+  intros a b j k e f Ha Hb Hlose.
+  unfold raw_wins in Hlose.
+  rewrite Ha, Hb in Hlose.
+  rewrite (raw_probability_matches_game_edges a b j k e f Ha Hb).
+  apply circuit_edge_losing_probability_zero.
+  exact Hlose.
+Qed.
+
+(* every valid measurement outcome from 0 to 5 can be decoded into an edge *)
+Lemma decode_valid_outcome :
+  forall v k,
+    k < 6 ->
+    exists e, decode_outcome v k = Some e.
+Proof.
+  intros v k Hk.
+  destruct v;
+  destruct k as [|[|[|[|[|[|k]]]]]];
+  try lia;
+  eexists; reflexivity.
+Qed.
+
+(* final theorem: any losing pair of valid raw measurement outcomes has 0 probability *)
+Theorem raw_strategy_losing_probability_zero :
+  forall a b j k,
+    j < 6 -> k < 6 ->
+    raw_wins a b j k = false ->
+    raw_outcome_probability a b j k = 0%R.
+Proof.
+  intros a b j k Hj Hk Hlose.
+  destruct (decode_valid_outcome a j Hj) as [e Ha].
+  destruct (decode_valid_outcome b k Hk) as [f Hb].
+  eapply decoded_raw_losing_probability_zero; eauto.
+Qed.
+

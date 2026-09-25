@@ -8,44 +8,60 @@ Inductive Vertex : Type :=
     | V5
     | V6.
 
-(*define edges*)
-Inductive Edge : Type :=
-| E01 | E02 | E03 | E04 | E05 | E06
-| E12 | E13 | E14 | E15 | E16
-| E23 | E24 | E25 | E26
-| E34 | E35 | E36
-| E45 | E46
-| E56.
+(*edge is a pair of vertices*)
+Definition Edge : Type := (Vertex * Vertex)%type.
 
-(*match edges names to vertex pairs*)
-Definition endpoints (e : Edge) : (Vertex * Vertex)%type :=
-  match e with
-  | E01 => (V0, V1)
-  | E02 => (V0, V2)
-  | E03 => (V0, V3)
-  | E04 => (V0, V4)
-  | E05 => (V0, V5)
-  | E06 => (V0, V6)
-  | E12 => (V1, V2)
-  | E13 => (V1, V3)
-  | E14 => (V1, V4)
-  | E15 => (V1, V5)
-  | E16 => (V1, V6)
-  | E23 => (V2, V3)
-  | E24 => (V2, V4)
-  | E25 => (V2, V5)
-  | E26 => (V2, V6)
-  | E34 => (V3, V4)
-  | E35 => (V3, V5)
-  | E36 => (V3, V6)
-  | E45 => (V4, V5)
-  | E46 => (V4, V6)
-  | E56 => (V5, V6)
+(*21 edges of K7*)
+Definition E01 : Edge := (V0, V1).
+Definition E02 : Edge := (V0, V2).
+Definition E03 : Edge := (V0, V3).
+Definition E04 : Edge := (V0, V4).
+Definition E05 : Edge := (V0, V5).
+Definition E06 : Edge := (V0, V6).
+
+Definition E12 : Edge := (V1, V2).
+Definition E13 : Edge := (V1, V3).
+Definition E14 : Edge := (V1, V4).
+Definition E15 : Edge := (V1, V5).
+Definition E16 : Edge := (V1, V6).
+
+Definition E23 : Edge := (V2, V3).
+Definition E24 : Edge := (V2, V4).
+Definition E25 : Edge := (V2, V5).
+Definition E26 : Edge := (V2, V6).
+
+Definition E34 : Edge := (V3, V4).
+Definition E35 : Edge := (V3, V5).
+Definition E36 : Edge := (V3, V6).
+
+Definition E45 : Edge := (V4, V5).
+Definition E46 : Edge := (V4, V6).
+
+Definition E56 : Edge := (V5, V6).
+
+Definition endpoints (e : Edge) : (Vertex * Vertex)%type := e.
+
+(*Give each vertex a number so endpoints can be put in a standard order*)
+Definition vertex_index (v : Vertex) : nat :=
+  match v with
+  | V0 => 0
+  | V1 => 1
+  | V2 => 2
+  | V3 => 3
+  | V4 => 4
+  | V5 => 5
+  | V6 => 6
   end.
 
-(*verification for endpoints function*)
-Example endpoints_E35 :
-  endpoints E35 = (V3, V5).
+(* Put the lower-numbered endpoint first. *)
+Definition ordered_endpoints (e : Edge) : (Vertex * Vertex)%type :=
+  let '(a, b) := endpoints e in
+  if Nat.leb (vertex_index a) (vertex_index b)
+  then (a, b)
+  else (b, a).
+
+Example ordered_endpoints_test :
+  ordered_endpoints (V5, V3) = (V3, V5).
 Proof.
   reflexivity.
 Qed.
@@ -76,10 +92,17 @@ Proof.
   reflexivity.
 Qed.
 
+(*K7 has no edges from any vertex to itself*)
+Definition valid_edge (e:Edge) : bool :=
+  let '(x,y) :=endpoints e in 
+  negb (vertex_equal x y).
+
 (*checks if a vertex is part of an edge*)
 Definition part_of (v : Vertex) (e : Edge) : bool :=
-  let '(x, y) := endpoints e in
-  orb (vertex_equal v x) (vertex_equal v y). (*orb is bollean version of or*)
+  let '(x, y) := endpoints e in 
+  andb
+  (valid_edge e)
+  (orb (vertex_equal v x) (vertex_equal v y)). (*orb is bollean version of or*)
 
 (*verification for part_of function*)
 Example part_of_E35 :
@@ -98,7 +121,24 @@ Qed.
 Definition edge_equal (e f : Edge) : bool :=
   let '(a, b) := endpoints e in (*in defines a temporary assignment*)
   let '(c, d) := endpoints f in
-  andb (vertex_equal a c) (vertex_equal b d). (*andb is boolean version of and*)
+  orb
+    (andb (vertex_equal a c) (vertex_equal b d)) (*andb is boolean version of and*)
+    (andb (vertex_equal a d) (vertex_equal b c)). (*4 conditions as edges no longer have direction*)
+
+    (*verification for valid_edge function*)
+Example loop_is_not_valid :
+  valid_edge (V3, V3) = false.
+Proof.
+  reflexivity.
+Qed.
+
+(*verification for unordered edges*)
+Example reversed_edge_is_equal :
+  edge_equal E35 (V5, V3) = true.
+Proof.
+  reflexivity.
+Qed.
+
 
 (*verification for edge_equal function*)
 Example same_edge :
