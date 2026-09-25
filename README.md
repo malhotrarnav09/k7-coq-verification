@@ -489,7 +489,3 @@ The final theorem was also checked using:
 ```coq
 Print Assumptions raw_strategy_losing_probability_zero.
 ```
-
-Coq reported three assumptions from its mathematical libraries: two concerning classical real numbers and one concerning functional extensionality.
-
-The project files were checked for unfinished proofs and project-level axiom declarations. After removing the earlier aborted placeholder, no `Admitted`, `admit`, `Axiom`, or `Abort` declarations remained.
