@@ -524,19 +524,17 @@ Proof.
 Qed.
 
 
-(* Alice measures in the conjugate basis.
-   With basis vectors stored as columns, the basis-change matrix is B^T. *)
+(* Alice uses the conjugate basis, so her basis change is B^T *)
 Definition alice_basis_change (a : Vertex) : Matrix 6 6 :=
   transpose (vertex_basis a).
 
 
-(* Bob measures in the original basis.
-   The basis-change matrix is B^\dagger. *)
+(* Bob uses the original basis, so his basis change is B^\dagger *)
 Definition bob_basis_change (b : Vertex) : Matrix 6 6 :=
   adjoint (vertex_basis b).
 
 
-(* Apply both players' basis changes simultaneously. *)
+(* combine Alice and Bob's basis changes *)
 Definition joint_basis_change
     (a b : Vertex) : Matrix 36 36 :=
   kron
@@ -544,7 +542,7 @@ Definition joint_basis_change
     (bob_basis_change b).
 
 
-(* Apply the combined basis change to the initial state. *)
+(* apply both basis changes to phi6 *)
 Definition post_basis_state
     (a b : Vertex) : Vector 36 :=
   Mmult
@@ -564,7 +562,7 @@ Definition raw_outcome_probability
     (raw_outcome_vector j k)
     (post_basis_state a b).
 
-(* rewrite the measurement probability so the outcome is expressed in terms of the measurement basis vectors: an easier form to manipulate *)
+(* move the basis change to the raw outcome so we can identify its edge vectors *)
 Lemma raw_outcome_probability_moved :
   forall a b j k,
   raw_outcome_probability a b j k =
@@ -1172,7 +1170,7 @@ Proof.
   - exact (proj1 B6_unitary).
 Qed.
 
-(* Bob's measurement outcome selects the vector of his decoded edge *)
+(* Bob's outcome picks out the vector of his decoded edge *)
 Lemma bob_outcome_matches_edge :
   forall b k e row,
     decode_outcome b k = Some e ->
@@ -1187,7 +1185,7 @@ Proof.
   exact (decode_outcome_matches_basis b k e Hdecode row).
 Qed.
 
-(* Alice's measurement outcome selects the conjugate of her decoded edge vector *)
+(* Alice's outcome picks out the conjugate of her decoded edge vector *)
 Lemma alice_outcome_matches_edge :
   forall a j e row,
     decode_outcome a j = Some e ->
@@ -1211,7 +1209,7 @@ Proof.
   reflexivity.
 Qed.
 
-(* the combined measurement gives the two decoded edge vectors *)
+(* match the combined outcome with Alice's and Bob's decoded edge vectors *)
 Lemma moved_outcome_matches_edges_entry :
   forall a b j k e f row,
     decode_outcome a j = Some e ->
@@ -1237,7 +1235,7 @@ Proof.
   reflexivity.
 Qed.
 
-(* the transformed outcome and decoded edge vectors agree at every valid entry *)
+(* check that both joint vectors match at every valid entry *)
 Lemma moved_outcome_matches_edges_equiv :
   forall a b j k e f,
     decode_outcome a j = Some e ->
@@ -1391,7 +1389,7 @@ Proof.
   reflexivity.
 Qed.
 
-(* the circuit probability equals the decoded edge-vector probability *)
+(* show that the raw measurement probability matches the decoded edge probability *)
 Lemma raw_probability_matches_decoded_edges :
   forall a b j k e f,
     decode_outcome a j = Some e ->
@@ -1433,7 +1431,7 @@ Proof.
 Qed.
 
 
-(* prove that the 6 terms of our shared state give the inner product of the two vectors *)
+(* add the 6 terms of phi6 to get the inner product of u and v *)
 Lemma phi6_unscaled_amplitude :
   forall (u v : Vector 6),
     inner_product (vector_conj u ⊗ v) phi6_unscaled =
@@ -1447,7 +1445,7 @@ Proof.
   lca.
 Qed.
 
-(* include the 1/sqrt6 factor to get the amplitude for our normalized shared state *)
+(* include the 1/sqrt6 factor from phi6 *)
 Lemma phi6_amplitude :
   forall (u v : Vector 6),
     inner_product (vector_conj u ⊗ v) phi6 =
@@ -1460,7 +1458,7 @@ Proof.
   reflexivity.
 Qed.
 
-(* prove that different intersecting edges have 0 probability because their vectors are orthogonal *)
+(* use orthogonality to show different intersecting edges have probability 0 *)
 Lemma quantum_edge_probability_zero_if_incompatible :
   forall e f,
     edge_equal e f = false ->
@@ -1478,14 +1476,14 @@ Proof.
   ring.
 Qed.
 
-(* calculate the probability of outputting edges e and f using our actual quantum probability *)
+(* use our quantum probability for valid edge answers, and 0 otherwise *)
 Definition circuit_edge_probability
     (a b : Vertex) (e f : Edge) : R :=
   if andb (part_of a e) (part_of b f)
   then quantum_edge_probability e f
   else 0%R.
 
-(* Alice cannot output an edge that does not contain her input vertex *)
+(* an invalid Alice edge gets probability 0 *)
 Lemma circuit_probability_zero_if_alice_invalid :
   forall a b e f,
     part_of a e = false ->
